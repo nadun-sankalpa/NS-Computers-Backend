@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "commonjs",
+    "outDir": "./dist", // Output folder for the deployment ready code generated
+    "rootDir": "./src", // Root directory of the app
+    "strict": true,
+    "esModuleInterop": true
+  }
+}
