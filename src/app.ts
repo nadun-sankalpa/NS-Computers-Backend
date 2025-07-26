@@ -1,15 +1,15 @@
-// app.ts
-import express, {Express, Request, Response} from "express";
+import express, {Express} from "express";
+import productRoutes from "./routes/product.routes";
 
-// 1. Initialize the express app
-const app: Express = express();
+// Initialize the express app
+const app:Express = express();
 
-// 2. Define a simple HTTP GET Request
-app.get('/', (req: Request, res: Response) => {
-    res.send("Hello World!");
-});
+// Middlewares
 
+// Instruct to parse the payload to JSON to be easily accessible data
 app.use(express.json());
 
-// 3. Expert the app to use outside (in index.ts)
+// Define application Routes
+app.use("/api/products", productRoutes);
+
 export default app;

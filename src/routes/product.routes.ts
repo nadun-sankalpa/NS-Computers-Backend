@@ -1,12 +1,31 @@
-import {Router} from "express";
-import {deleteProduct, getAllProducts, getProduct, saveProduct, updateProduct} from "../controller/product.controller";
+import { Router } from "express";
+import {
+    deleteProduct,
+    getAllProducts,
+    getProduct,
+    saveProduct,
+    updateProduct,
+    searchProducts
+} from "../controller/product.controller";
 
 const productRouter: Router = Router();
 
-productRouter.get("/all", getAllProducts);
-productRouter.post("/save", saveProduct);
+// Get all products
+productRouter.get("/get-all-products", getAllProducts);
+
+// Search products
+productRouter.get("/search", searchProducts);
+
+// Get single product by ID
 productRouter.get("/:id", getProduct);
-productRouter.put("/update/:id", updateProduct);
-productRouter.delete("/delete/:id", deleteProduct);
+
+// Create new product
+productRouter.post("/save-product", saveProduct);
+
+// Update product
+productRouter.put("/:id", updateProduct);
+
+// Delete product
+productRouter.delete("/:id", deleteProduct);
 
 export default productRouter;
