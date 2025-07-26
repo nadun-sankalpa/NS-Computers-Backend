@@ -64,7 +64,7 @@ class UserService {
     public getUserById(id: number): Omit<User, 'password'> | undefined {
         const user = this.users.find(u => u.id === id);
         if (!user) return undefined;
-        
+
         const { password, ...userWithoutPassword } = user;
         return userWithoutPassword;
     }
@@ -112,13 +112,13 @@ class UserService {
      */
     public updateUser(id: number, userData: Partial<Omit<User, 'id'>>): { user?: Omit<User, 'password'>; errors: string[] } {
         const userIndex = this.users.findIndex(u => u.id === id);
-        
+
         if (userIndex === -1) {
             return { errors: ['User not found'] };
         }
 
         // Check if email is being changed and already exists
-        if (userData.email && this.users.some(u => 
+        if (userData.email && this.users.some(u =>
             u.id !== id && u.email.toLowerCase() === userData.email!.toLowerCase()
         )) {
             return { errors: ['Email already in use'] };
@@ -151,11 +151,11 @@ class UserService {
     public deleteUser(id: number): { success: boolean; message: string } {
         const initialLength = this.users.length;
         this.users = this.users.filter(user => user.id !== id);
-        
+
         return {
             success: this.users.length < initialLength,
-            message: this.users.length < initialLength 
-                ? 'User deleted successfully' 
+            message: this.users.length < initialLength
+                ? 'User deleted successfully'
                 : 'User not found'
         };
     }
@@ -164,8 +164,8 @@ class UserService {
      * Verify user credentials
      */
     public verifyCredentials(email: string, password: string): { isValid: boolean; user?: Omit<User, 'password'> } {
-        const user = this.users.find(u => 
-            u.email.toLowerCase() === email.toLowerCase() && 
+        const user = this.users.find(u =>
+            u.email.toLowerCase() === email.toLowerCase() &&
             u.password === password // In a real app, you would hash and compare passwords
         );
 
