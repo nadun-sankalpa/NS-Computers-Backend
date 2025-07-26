@@ -9,27 +9,29 @@ const generateId = (): number => {
 };
 
 // Get all products
-export const getAllProducts = (): Product[] => {
+const getAllProducts = (): Product[] => {
     return productList;
 };
 
 // Get a single product by ID
-export const getProductById = (id: number): Product | undefined => {
+const getProductById = (id: number): Product | undefined => {
     return productList.find(product => product.id === id);
 };
 
 // Create a new product
-export const createProduct = (productData: Omit<Product, 'id'>): Product => {
+const createProduct = (productData: Omit<Product, 'id'>): Product => {
     const newProduct: Product = {
         id: generateId(),
-        ...productData
+        ...productData,
+        createdAt: new Date(),
+        updatedAt: new Date()
     };
     productList.push(newProduct);
     return newProduct;
 };
 
 // Update an existing product
-export const updateProduct = (id: number, productData: Partial<Omit<Product, 'id'>>): Product | null => {
+const updateProduct = (id: number, productData: Partial<Omit<Product, 'id'>>): Product | null => {
     const productIndex = productList.findIndex(p => p.id === id);
     
     if (productIndex === -1) return null;
@@ -37,7 +39,8 @@ export const updateProduct = (id: number, productData: Partial<Omit<Product, 'id
     const updatedProduct = {
         ...productList[productIndex],
         ...productData,
-        id // Ensure ID remains unchanged
+        id, // Ensure ID remains unchanged
+        updatedAt: new Date()
     };
     
     productList[productIndex] = updatedProduct;
@@ -45,7 +48,7 @@ export const updateProduct = (id: number, productData: Partial<Omit<Product, 'id
 };
 
 // Delete a product
-export const deleteProduct = (id: number): boolean => {
+const deleteProduct = (id: number): boolean => {
     const initialLength = productList.length;
     const filteredProducts = productList.filter(product => product.id !== id);
     
@@ -60,11 +63,21 @@ export const deleteProduct = (id: number): boolean => {
 };
 
 // Search products by name or description
-export const searchProducts = (query: string): Product[] => {
+const searchProducts = (query: string): Product[] => {
     const searchTerm = query.toLowerCase();
     return productList.filter(
         product => 
             product.name.toLowerCase().includes(searchTerm) ||
-            product.description.toLowerCase().includes(searchTerm)
+            (product.description && product.description.toLowerCase().includes(searchTerm))
     );
+};
+
+// Export all functions as named exports
+export {
+    getAllProducts,
+    getProductById,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    searchProducts
 };

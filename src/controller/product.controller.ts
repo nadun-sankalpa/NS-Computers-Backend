@@ -34,7 +34,7 @@ export const getProduct = async (req: Request, res: Response) => {
 // Create new product
 export const saveProduct = async (req: Request, res: Response) => {
     try {
-        const { name, description, price, currency, image } = req.body;
+        const { name, description, price, currency,stock, image } = req.body;
         
         // Basic validation
         if (!name || !description || price === undefined || !currency) {
@@ -46,7 +46,7 @@ export const saveProduct = async (req: Request, res: Response) => {
             description,
             price: parseFloat(price),
             currency,
-            stock: 0,
+            stock: stock,
             image: image || ''
         });
         
