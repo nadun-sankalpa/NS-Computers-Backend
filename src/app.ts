@@ -1,5 +1,6 @@
 import express, {Express} from "express";
 import productRoutes from "./routes/product.routes";
+import userRoutes from "./routes/user.routes";
 
 // Initialize the express app
 const app:Express = express();
@@ -11,5 +12,6 @@ app.use(express.json());
 
 // Define application Routes
 app.use("/api/products", productRoutes);
+app.use("/api/users", userRoutes);
 
 export default app;
