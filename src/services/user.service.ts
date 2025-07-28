@@ -1,5 +1,6 @@
 import User, { IUser, IUserDocument } from '../models/user.model';
 import { FilterQuery, UpdateQuery, Types } from 'mongoose';
+import { emailService } from './email.service';
 
 export class UserService {
     // Email validation regex
@@ -67,7 +68,18 @@ export class UserService {
                 phone: userData.phone || ''
             });
             
-            return await user.save();
+            const savedUser = await user.save();
+
+            // Send welcome email (don't await to not block the response)
+            emailService.sendWelcomeEmail(savedUser.email, savedUser.name)
+                .then(sent => {
+                    if (!sent) {
+                        console.warn('Failed to send welcome email to:', savedUser.email);
+                    }
+                })
+                .catch(console.error);
+
+            return savedUser;
         } catch (error: any) {
             throw new Error(`Error creating user: ${error.message}`);
         }

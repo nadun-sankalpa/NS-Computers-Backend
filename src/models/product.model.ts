@@ -2,6 +2,7 @@ import { Document, Schema, model, Model } from 'mongoose';
 
 // Interface for Product document
 export interface IProduct extends Document {
+    _id: number;
     name: string;
     description: string;
     price: number;
@@ -20,6 +21,7 @@ interface IProductModel extends Model<IProduct> {
 // Create the schema
 const productSchema = new Schema<IProduct, IProductModel>(
     {
+        _id: { type: Number },
         name: {
             type: String,
             required: true,

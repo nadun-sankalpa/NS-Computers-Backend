@@ -11,6 +11,7 @@ export interface IOrderItem {
 }
 
 export interface IOrder extends Document {
+    _id: number;
     user: Types.ObjectId | IUser;
     items: IOrderItem[];
     shippingAddress: {
@@ -47,6 +48,7 @@ interface IOrderModel extends Model<IOrder> {
 // Create the schema
 const orderSchema = new Schema<IOrder, IOrderModel>(
     {
+        _id: { type: Number },
         user: {
             type: Schema.Types.ObjectId,
             required: true,

@@ -18,7 +18,14 @@ interface EnvVars {
   // Security
   PASSWORD_SALT_ROUNDS: number;
   
-  // CORS
+  // Email
+  SMTP_HOST: string;
+  SMTP_PORT: number;
+  SMTP_USER: string;
+  SMTP_PASSWORD: string;
+  SMTP_FROM: string;
+  
+  // Frontend
   CORS_ORIGIN: string;
 }
 
@@ -26,10 +33,14 @@ interface EnvVars {
 const requiredVars: (keyof EnvVars)[] = [
   'JWT_SECRET',
   'JWT_REFRESH_SECRET',
-  'CORS_ORIGIN'
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_USER',
+  'SMTP_PASSWORD',
+  'SMTP_FROM'
 ];
 
-// Check for missing required environment variables
+// Validate that all required environment variables are set
 const missingVars = requiredVars.filter(varName => !process.env[varName]);
 if (missingVars.length > 0) {
   throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
@@ -38,23 +49,30 @@ if (missingVars.length > 0) {
 // Export environment variables with type safety
 export const env: EnvVars = {
   // Server
-  PORT: parseInt(process.env.PORT || '3002', 10),
+  PORT: parseInt(process.env.PORT || '3000', 10),
   NODE_ENV: (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development',
   
   // JWT
   JWT_SECRET: process.env.JWT_SECRET!,
-  JWT_EXPIRE: process.env.JWT_EXPIRE || '15m',
+  JWT_EXPIRE: process.env.JWT_EXPIRE || '1h',
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET!,
   JWT_REFRESH_EXPIRE: process.env.JWT_REFRESH_EXPIRE || '7d',
   
   // Security
   PASSWORD_SALT_ROUNDS: parseInt(process.env.PASSWORD_SALT_ROUNDS || '10', 10),
   
-  // CORS
-  CORS_ORIGIN: process.env.CORS_ORIGIN!,
+  // Email
+  SMTP_HOST: process.env.SMTP_HOST!,
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
+  SMTP_USER: process.env.SMTP_USER!,
+  SMTP_PASSWORD: process.env.SMTP_PASSWORD!,
+  SMTP_FROM: process.env.SMTP_FROM!,
+  
+  // Frontend
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
 };
 
-// Only log environment info in development
-if (env.NODE_ENV === 'development') {
-  console.log(`🌱 Environment: ${env.NODE_ENV}`);
+// Log environment in development
+if (process.env.NODE_ENV === 'development') {
+  console.log('Environment variables loaded successfully');
 }
