@@ -1,67 +1,73 @@
 import { Request, Response } from 'express';
-import { userService } from '../services/user.service';
-import { User } from '../model/user.model';
+import { userService } from '../services';
+import { IUser } from '../models/user.model';
 
-type UserResponse = Omit<User, 'password'>;
+interface UserResponse {
+    success: boolean;
+    message: string;
+    data?: any;
+    error?: string;
+}
 
 /**
  * Get all users
  */
-export const getAllUsers = (req: Request, res: Response): void => {
+export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
     try {
-        const users = userService.getAllUsers();
-        res.status(200).json(users);
-    } catch (error) {
-        console.error('Error getting users:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to retrieve users',
-            error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        const users = await userService.getAllUsers();
+        const response: UserResponse = {
+            success: true,
+            message: 'Users retrieved successfully',
+            data: users
+        };
+        res.status(200).json(response);
+    } catch (error: any) {
+        const response: UserResponse = {
+            success: false,
+            message: 'Error retrieving users',
+            error: error.message
+        };
+        res.status(500).json(response);
     }
 };
 
 /**
  * Get user by ID
  */
-export const getUser = (req: Request, res: Response): void => {
+export const getUser = async (req: Request, res: Response): Promise<void> => {
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) {
-            res.status(400).json({ 
-                success: false, 
-                message: 'Invalid user ID' 
-            });
-            return;
-        }
-
-        const user = userService.getUserById(id);
+        const userId = req.params.id;
+        const user = await userService.findUserById(userId);
+        
         if (!user) {
-            res.status(404).json({ 
-                success: false, 
-                message: 'User not found' 
-            });
+            const response: UserResponse = {
+                success: false,
+                message: 'User not found'
+            };
+            res.status(404).json(response);
             return;
         }
-
-        res.status(200).json({ 
-            success: true, 
-            data: user 
-        });
-    } catch (error) {
-        console.error('Error getting user:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to retrieve user',
-            error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        
+        const response: UserResponse = {
+            success: true,
+            message: 'User retrieved successfully',
+            data: user
+        };
+        res.status(200).json(response);
+    } catch (error: any) {
+        const response: UserResponse = {
+            success: false,
+            message: 'Error retrieving user',
+            error: error.message
+        };
+        res.status(500).json(response);
     }
 };
 
 /**
  * Create a new user
  */
-export const saveUser = (req: Request, res: Response): void => {
+export const saveUser = async (req: Request, res: Response): Promise<void> => {
     try {
         const { name, email, password, phone, address, role } = req.body;
 
@@ -74,40 +80,31 @@ export const saveUser = (req: Request, res: Response): void => {
             return;
         }
 
-        // Convert phone to number if provided
-        const phoneNumber = phone ? Number(phone) : undefined;
-
-        const result = userService.createUser({
+        // Prepare user data
+        const userData = {
             name,
             email,
             password,
-            phone: phone,
+            phone: phone ? phone.toString() : '',
             address: address || '',
-            role: role || 'customer',
-            createdAt: new Date(),
-            updatedAt: new Date()
-        });
+            role: (role as 'admin' | 'customer') || 'customer'
+        };
 
-        if (result.errors.length > 0) {
-            res.status(400).json({ 
-                success: false, 
-                message: 'Validation failed',
-                errors: result.errors
-            });
-            return;
-        }
+        const user = await userService.createUser(userData);
+
+        // Remove sensitive data before sending response
+        const { password: _, refreshToken, ...userWithoutSensitiveData } = user.toObject();
 
         res.status(201).json({ 
             success: true, 
             message: 'User created successfully',
-            data: result.user
+            data: userWithoutSensitiveData
         });
-    } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to create user',
-            error: error instanceof Error ? error.message : 'Unknown error'
+    } catch (error: any) {
+        res.status(400).json({
+            success: false,
+            message: 'Error creating user',
+            error: error.message
         });
     }
 };
@@ -115,40 +112,31 @@ export const saveUser = (req: Request, res: Response): void => {
 /**
  * Update an existing user
  */
-export const updateUser = (req: Request, res: Response): void => {
+export const updateUser = async (req: Request, res: Response): Promise<void> => {
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) {
+        const { id } = req.params;
+        if (!id) {
             res.status(400).json({ 
                 success: false, 
-                message: 'Invalid user ID' 
+                message: 'User ID is required' 
             });
             return;
         }
 
         const { name, email, password, phone, address, role } = req.body;
-        const updateData: Partial<User> = {};
+        const updateData: Partial<IUser> = {};
 
         // Only include fields that are provided in the request
         if (name) updateData.name = name;
         if (email) updateData.email = email;
-        if (password) updateData.password = password; // In a real app, this would be hashed
-        if (phone !== undefined) updateData.phone = (phone);
+        if (password) updateData.password = password;
+        if (phone !== undefined) updateData.phone = phone.toString();
         if (address !== undefined) updateData.address = address;
         if (role) updateData.role = role;
 
-        const result = userService.updateUser(id, updateData);
+        const updatedUser = await userService.updateUser(id, updateData);
 
-        if (result.errors.length > 0) {
-            res.status(400).json({ 
-                success: false, 
-                message: 'Validation failed',
-                errors: result.errors
-            });
-            return;
-        }
-
-        if (!result.user) {
+        if (!updatedUser) {
             res.status(404).json({ 
                 success: false, 
                 message: 'User not found' 
@@ -159,7 +147,7 @@ export const updateUser = (req: Request, res: Response): void => {
         res.status(200).json({ 
             success: true, 
             message: 'User updated successfully',
-            data: result.user
+            data: updatedUser
         });
     } catch (error) {
         console.error('Error updating user:', error);
@@ -174,30 +162,30 @@ export const updateUser = (req: Request, res: Response): void => {
 /**
  * Delete a user
  */
-export const deleteUser = (req: Request, res: Response): void => {
+export const deleteUser = async (req: Request, res: Response): Promise<void> => {
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) {
+        const { id } = req.params;
+        if (!id) {
             res.status(400).json({ 
                 success: false, 
-                message: 'Invalid user ID' 
+                message: 'User ID is required' 
             });
             return;
         }
 
-        const result = userService.deleteUser(id);
+        const result = await userService.deleteUser(id);
         
-        if (!result.success) {
+        if (!result) {
             res.status(404).json({ 
                 success: false, 
-                message: result.message 
+                message: 'User not found' 
             });
             return;
         }
 
         res.status(200).json({ 
             success: true, 
-            message: result.message 
+            message: 'User deleted successfully' 
         });
     } catch (error) {
         console.error('Error deleting user:', error);
@@ -212,36 +200,36 @@ export const deleteUser = (req: Request, res: Response): void => {
 /**
  * Search users by name or email
  */
-export const searchUser = (req: Request, res: Response): void => {
+export const searchUser = async (req: Request, res: Response): Promise<void> => {
     try {
         const { q } = req.query;
         
         if (!q || typeof q !== 'string') {
-            res.status(400).json({ 
+            const response: UserResponse = {
                 success: false, 
-                message: 'Search query is required' 
-            });
+                message: 'Search query is required'
+            };
+            res.status(400).json(response);
             return;
         }
 
-        // In a real app, you would call userService.searchUsers(q)
-        // For now, we'll filter the users in the controller
-        const users = userService.getAllUsers().filter(user => 
-            user.name.toLowerCase().includes(q.toLowerCase()) ||
-            user.email.toLowerCase().includes(q.toLowerCase())
-        );
-
-        res.status(200).json({ 
-            success: true, 
-            data: users 
-        });
-    } catch (error) {
-        console.error('Error searching users:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to search users',
-            error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        // Use the searchUsers method from the user service
+        const users = await userService.searchUsers(q);
+        
+        const response: UserResponse = {
+            success: true,
+            message: 'Users retrieved successfully',
+            data: users
+        };
+        
+        res.status(200).json(response);
+    } catch (error: any) {
+        const response: UserResponse = {
+            success: false,
+            message: 'Error searching users',
+            error: error.message
+        };
+        res.status(500).json(response);
     }
 };
 

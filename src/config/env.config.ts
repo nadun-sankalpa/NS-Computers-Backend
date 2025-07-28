@@ -38,7 +38,7 @@ if (missingVars.length > 0) {
 // Export environment variables with type safety
 export const env: EnvVars = {
   // Server
-  PORT: parseInt(process.env.PORT || '3000', 10),
+  PORT: parseInt(process.env.PORT || '3002', 10),
   NODE_ENV: (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development',
   
   // JWT
@@ -54,12 +54,7 @@ export const env: EnvVars = {
   CORS_ORIGIN: process.env.CORS_ORIGIN!,
 };
 
-// Log environment in non-production
-if (env.NODE_ENV !== 'production') {
-  console.log('Environment variables loaded:', {
-    NODE_ENV: env.NODE_ENV,
-    PORT: env.PORT,
-    CORS_ORIGIN: env.CORS_ORIGIN,
-    // Don't log sensitive information
-  });
+// Only log environment info in development
+if (env.NODE_ENV === 'development') {
+  console.log(`🌱 Environment: ${env.NODE_ENV}`);
 }

@@ -1,34 +1,39 @@
 import { Request, Response } from 'express';
-import { Order } from '../model/order.model';
-import { OrderItem } from '../model/orderItem.model';
-import orderService from '../services/order.service';
+import { Order, IOrder } from '../models/order.model';
+import { orderService } from '../services/order.service';
 
 // Create a new order
 export const createOrder = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { userId, items } = req.body;
-
-        // Validate request body
-        if (!userId || !Array.isArray(items) || items.length === 0) {
-            res.status(400).json({
-                success: false,
-                message: 'User ID and at least one order item are required'
-            });
+        const { userId, items, shippingAddress, paymentMethod } = req.body;
+        
+        if (!userId) {
+            res.status(400).json({ message: 'User ID is required' });
+            return;
+        }
+        
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            res.status(400).json({ message: 'Order items are required' });
             return;
         }
 
-        // Convert userId to number
-        const userIdNum = Number(userId);
-        if (isNaN(userIdNum)) {
-            res.status(400).json({
-                success: false,
-                message: 'Invalid user ID format'
-            });
+        if (!shippingAddress || !shippingAddress.address || !shippingAddress.city || !shippingAddress.postalCode || !shippingAddress.country) {
+            res.status(400).json({ message: 'Complete shipping address is required' });
             return;
         }
 
-        const { order, error } = await orderService.createOrder(userIdNum, items);
-
+        if (!paymentMethod) {
+            res.status(400).json({ message: 'Payment method is required' });
+            return;
+        }
+        
+        const { order, error } = await orderService.createOrder(
+            userId,
+            items,
+            shippingAddress,
+            paymentMethod
+        );
+        
         if (error || !order) {
             res.status(400).json({
                 success: false,
@@ -51,178 +56,149 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 };
 
 // Get all orders
-export const getAllOrders = (req: Request, res: Response): void => {
+export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
     try {
-        const orders = orderService.getAllOrders();
-        res.json({
+        const orders = await orderService.getAllOrders();
+        
+        res.status(200).json({
             success: true,
             count: orders.length,
             data: orders
         });
     } catch (error) {
-        console.error('Error in getAllOrders:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: 'Error fetching orders',
+            error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };
 
 // Get order by ID
-export const getOrderById = (req: Request, res: Response): void => {
+export const getOrderById = async (req: Request, res: Response): Promise<void> => {
     try {
-        const orderId = parseInt(req.params.id);
-        if (isNaN(orderId)) {
-            res.status(400).json({
-                success: false,
-                message: 'Invalid order ID'
-            });
+        const orderId = req.params.id;
+        
+        if (!orderId) {
+            res.status(400).json({ success: false, message: 'Order ID is required' });
             return;
         }
-
-        const order = orderService.getOrderById(orderId);
+        
+        const order = await orderService.getOrderById(orderId);
+        
         if (!order) {
-            res.status(404).json({
-                success: false,
-                message: 'Order not found'
-            });
+            res.status(404).json({ success: false, message: 'Order not found' });
             return;
         }
-
-        res.json({
+        
+        res.status(200).json({
             success: true,
             data: order
         });
     } catch (error) {
-        console.error('Error in getOrderById:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: 'Error fetching order',
+            error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };
 
 // Get orders by user ID
-export const getOrdersByUserId = (req: Request, res: Response): void => {
+export const getOrdersByUserId = async (req: Request, res: Response): Promise<void> => {
     try {
         const { userId } = req.params;
+        
         if (!userId) {
-            res.status(400).json({
-                success: false,
-                message: 'User ID is required'
-            });
+            res.status(400).json({ success: false, message: 'User ID is required' });
             return;
         }
-
-        const userIdNum = Number(userId);
-        if (isNaN(userIdNum)) {
-            res.status(400).json({
-                success: false,
-                message: 'Invalid user ID format'
-            });
-            return;
-        }
-
-        const orders = orderService.getOrdersByUserId(userIdNum);
-        res.json({
+        
+        const orders = await orderService.getOrdersByUserId(userId);
+        
+        res.status(200).json({
             success: true,
             count: orders.length,
             data: orders
         });
     } catch (error) {
-        console.error('Error in getOrdersByUserId:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: 'Error fetching orders',
+            error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };
 
 // Update order status
-export const updateOrderStatus = (req: Request, res: Response): void => {
+export const updateOrderStatus = async (req: Request, res: Response): Promise<void> => {
     try {
-        const orderId = parseInt(req.params.id);
-        if (isNaN(orderId)) {
-            res.status(400).json({
-                success: false,
-                message: 'Invalid order ID'
-            });
+        const orderId = req.params.id;
+        
+        if (!orderId) {
+            res.status(400).json({ success: false, message: 'Order ID is required' });
             return;
         }
-
+        
         const { status } = req.body;
+        
         if (!status || !['pending', 'processing', 'completed', 'cancelled'].includes(status)) {
-            res.status(400).json({
-                success: false,
-                message: 'Valid status is required (pending, processing, completed, cancelled)'
-            });
+            res.status(400).json({ success: false, message: 'Valid status is required (pending, processing, completed, cancelled)' });
             return;
         }
-
-        const updatedOrder = orderService.updateOrderStatus(orderId, status);
-        if (!updatedOrder) {
-            res.status(404).json({
-                success: false,
-                message: 'Order not found'
-            });
+        
+        // First get the order
+        const order = await Order.findById(orderId);
+        
+        if (!order) {
+            res.status(404).json({ success: false, message: 'Order not found' });
             return;
         }
-
-        res.json({
+        
+        // Update the status
+        order.status = status;
+        const updatedOrder = await order.save();
+        
+        res.status(200).json({
             success: true,
             data: updatedOrder
         });
     } catch (error) {
-        console.error('Error in updateOrderStatus:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: 'Error updating order status',
+            error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };
 
 // Delete order
-export const deleteOrder = (req: Request, res: Response): void => {
+export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
     try {
-        const orderId = parseInt(req.params.id);
-        if (isNaN(orderId)) {
-            res.status(400).json({
-                success: false,
-                message: 'Invalid order ID'
-            });
-            return;
-        }
-
-        // First check if order exists
-        const order = orderService.getOrderById(orderId);
-        if (!order) {
-            res.status(404).json({
-                success: false,
-                message: 'Order not found'
-            });
-            return;
-        }
-
-        // For this implementation, we'll just filter out the order
-        const success = orderService.deleteOrder(orderId);
+        const orderId = req.params.id;
         
-        if (!success) {
-            res.status(500).json({
-                success: false,
-                message: 'Failed to delete order'
-            });
+        if (!orderId) {
+            res.status(400).json({ success: false, message: 'Order ID is required' });
             return;
         }
-
-        res.json({
+        
+        // Check if order exists and delete it
+        const deletedOrder = await Order.findByIdAndDelete(orderId);
+        
+        if (!deletedOrder) {
+            res.status(404).json({ success: false, message: 'Order not found' });
+            return;
+        }
+        
+        res.status(200).json({
             success: true,
             message: 'Order deleted successfully'
         });
     } catch (error) {
-        console.error('Error in deleteOrder:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: 'Error deleting order',
+            error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };

@@ -1,48 +1,30 @@
-import { User } from "../model/user.model";
+import User, { IUser, IUserDocument } from '../models/user.model';
+import { FilterQuery, UpdateQuery, Types } from 'mongoose';
 
-class UserService {
-    // In-memory storage
-    private users: User[] = [];
-
+export class UserService {
     // Email validation regex
     private readonly emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    // Password requirements:
-    // - At least 8 characters
-    // - At least one uppercase letter
-    // - At least one lowercase letter
-    // - At least one number
+    
+    // Password validation regex - at least 8 chars, 1 uppercase, 1 lowercase, 1 number
     private readonly passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/;
-
-    /**
-     * Generate a new user ID
-     */
-    private generateId(): number {
-        if (this.users.length === 0) return 1;
-        const maxId = Math.max(...this.users.map(u => u.id));
-        return maxId + 1;
-    }
 
     /**
      * Validate user input
      */
-    private validateUserInput(userData: Partial<User> & { password?: string }): { isValid: boolean; errors: string[] } {
+    private validateUserInput(userData: Partial<IUser> & { password?: string }): { isValid: boolean; errors: string[] } {
+        const { name, email, password } = userData;
         const errors: string[] = [];
 
-        if (userData.email && !this.emailRegex.test(userData.email)) {
-            errors.push('Invalid email format');
+        if (!name || name.trim().length < 2) {
+            errors.push('Name must be at least 2 characters long');
         }
 
-        if (userData.password && !this.passwordRegex.test(userData.password)) {
-            errors.push('Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, and one number');
+        if (!email || !this.emailRegex.test(email)) {
+            errors.push('Please enter a valid email address');
         }
 
-        if (userData.phone !== undefined) {
-            // Convert to string to check length if it's a number
-            const phoneStr = userData.phone.toString();
-            if (phoneStr.length !== 10 || !/^\d+$/.test(phoneStr)) {
-                errors.push('Phone number must be a 10-digit number');
-            }
+        if (password && !this.passwordRegex.test(password)) {
+            errors.push('Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number');
         }
 
         return {
@@ -52,132 +34,181 @@ class UserService {
     }
 
     /**
-     * Get all users (without passwords)
-     */
-    public getAllUsers(): Omit<User, 'password'>[] {
-        return this.users.map(({ password, ...user }) => user);
-    }
-
-    /**
-     * Get user by ID (without password)
-     */
-    public getUserById(id: number): Omit<User, 'password'> | undefined {
-        const user = this.users.find(u => u.id === id);
-        if (!user) return undefined;
-
-        const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
-    }
-
-    /**
-     * Get user by email (with password, for login verification)
-     */
-    public getUserByEmail(email: string): User | undefined {
-        return this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    }
-
-    /**
      * Create a new user
      */
-    public createUser(userData: Omit<User, 'id'>): { user?: Omit<User, 'password'>; errors: string[] } {
-        // Check if email already exists
-        if (this.users.some(u => u.email.toLowerCase() === userData.email.toLowerCase())) {
-            return { errors: ['Email already in use'] };
-        }
-
+    async createUser(userData: {
+        name: string;
+        email: string;
+        password: string;
+        role?: 'admin' | 'customer';
+        address?: string;
+        phone?: string;
+    }): Promise<IUserDocument> {
         // Validate input
-        const validation = this.validateUserInput(userData);
-        if (!validation.isValid) {
-            return { errors: validation.errors };
+        const { isValid, errors } = this.validateUserInput(userData);
+        if (!isValid) {
+            throw new Error(`Validation failed: ${errors.join(', ')}`);
         }
 
-        // Create new user
-        const newUser: User = {
-            id: this.generateId(),
-            ...userData,
-            role: userData.role || 'customer',
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
+        try {
+            // Check if user already exists
+            const existingUser = await User.findOne({ email: userData.email });
+            if (existingUser) {
+                throw new Error('User with this email already exists');
+            }
 
-        this.users.push(newUser);
-
-        // Return user without password
-        const { password, ...userWithoutPassword } = newUser;
-        return { user: userWithoutPassword, errors: [] };
+            // Create and save the user
+            const user = new User({
+                name: userData.name,
+                email: userData.email,
+                password: userData.password,
+                role: userData.role || 'customer',
+                address: userData.address || '',
+                phone: userData.phone || ''
+            });
+            
+            return await user.save();
+        } catch (error: any) {
+            throw new Error(`Error creating user: ${error.message}`);
+        }
     }
 
     /**
-     * Update an existing user
+     * Get all users (without sensitive data)
      */
-    public updateUser(id: number, userData: Partial<Omit<User, 'id'>>): { user?: Omit<User, 'password'>; errors: string[] } {
-        const userIndex = this.users.findIndex(u => u.id === id);
-
-        if (userIndex === -1) {
-            return { errors: ['User not found'] };
+    async getAllUsers(): Promise<Omit<IUser, 'password' | 'refreshToken'>[]> {
+        try {
+            const users = await User.find({}, { password: 0, refreshToken: 0 });
+            return users;
+        } catch (error: any) {
+            throw new Error(`Error retrieving users: ${error.message}`);
         }
-
-        // Check if email is being changed and already exists
-        if (userData.email && this.users.some(u =>
-            u.id !== id && u.email.toLowerCase() === userData.email!.toLowerCase()
-        )) {
-            return { errors: ['Email already in use'] };
-        }
-
-        // Validate input
-        const validation = this.validateUserInput(userData);
-        if (!validation.isValid) {
-            return { errors: validation.errors };
-        }
-
-        // Update user
-        const updatedUser = {
-            ...this.users[userIndex],
-            ...userData,
-            id, // Ensure ID remains unchanged
-            updatedAt: new Date()
-        };
-
-        this.users[userIndex] = updatedUser;
-
-        // Return user without password
-        const { password, ...userWithoutPassword } = updatedUser;
-        return { user: userWithoutPassword, errors: [] };
     }
 
     /**
-     * Delete a user
+     * Find user by ID (without sensitive data)
      */
-    public deleteUser(id: number): { success: boolean; message: string } {
-        const initialLength = this.users.length;
-        this.users = this.users.filter(user => user.id !== id);
-
-        return {
-            success: this.users.length < initialLength,
-            message: this.users.length < initialLength
-                ? 'User deleted successfully'
-                : 'User not found'
-        };
+    async findUserById(id: string): Promise<Omit<IUser, 'password' | 'refreshToken'> | null> {
+        try {
+            if (!Types.ObjectId.isValid(id)) {
+                throw new Error('Invalid user ID');
+            }
+            const user = await User.findById(id, { password: 0, refreshToken: 0 });
+            return user;
+        } catch (error: any) {
+            throw new Error(`Error finding user: ${error.message}`);
+        }
     }
 
     /**
-     * Verify user credentials
+     * Find user by email (with password, for login verification)
      */
-    public verifyCredentials(email: string, password: string): { isValid: boolean; user?: Omit<User, 'password'> } {
-        const user = this.users.find(u =>
-            u.email.toLowerCase() === email.toLowerCase() &&
-            u.password === password // In a real app, you would hash and compare passwords
-        );
-
-        if (!user) {
-            return { isValid: false };
+    async findUserByEmail(email: string): Promise<IUserDocument | null> {
+        try {
+            return await User.findOne({ email });
+        } catch (error: any) {
+            throw new Error(`Error finding user by email: ${error.message}`);
         }
+    }
 
-        const { password: _, ...userWithoutPassword } = user;
-        return {
-            isValid: true,
-            user: userWithoutPassword
-        };
+    /**
+     * Update user
+     */
+    async updateUser(
+        id: string, 
+        updateData: UpdateQuery<IUser>
+    ): Promise<Omit<IUser, 'password' | 'refreshToken'> | null> {
+        try {
+            if (!Types.ObjectId.isValid(id)) {
+                throw new Error('Invalid user ID');
+            }
+            
+            // Don't allow updating password or refreshToken through this method
+            const { password, refreshToken, ...safeUpdateData } = updateData as any;
+            
+            const updatedUser = await User.findByIdAndUpdate(
+                id, 
+                { $set: { ...safeUpdateData, updatedAt: new Date() } },
+                { new: true, runValidators: true, projection: { password: 0, refreshToken: 0 } }
+            );
+            
+            return updatedUser;
+        } catch (error: any) {
+            throw new Error(`Error updating user: ${error.message}`);
+        }
+    }
+
+    /**
+     * Delete user
+     */
+    async deleteUser(id: string): Promise<boolean> {
+        try {
+            if (!Types.ObjectId.isValid(id)) {
+                throw new Error('Invalid user ID');
+            }
+            
+            const result = await User.findByIdAndDelete(id);
+            return !!result;
+        } catch (error: any) {
+            throw new Error(`Error deleting user: ${error.message}`);
+        }
+    }
+
+    /**
+     * Compare password
+     */
+    async comparePassword(user: IUser, candidatePassword: string): Promise<boolean> {
+        try {
+            const userDoc = await User.findById(user._id).select('+password');
+            if (!userDoc) return false;
+            
+            return await userDoc.comparePassword(candidatePassword);
+        } catch (error: any) {
+            throw new Error(`Error comparing passwords: ${error.message}`);
+        }
+    }
+
+    /**
+     * Update refresh token
+     */
+    async updateRefreshToken(userId: string, refreshToken: string | null): Promise<void> {
+        try {
+            if (!Types.ObjectId.isValid(userId)) {
+                throw new Error('Invalid user ID');
+            }
+            
+            await User.findByIdAndUpdate(
+                userId,
+                { refreshToken },
+                { new: true }
+            );
+        } catch (error: any) {
+            throw new Error(`Error updating refresh token: ${error.message}`);
+        }
+    }
+
+    /**
+     * Search users by name or email
+     */
+    async searchUsers(query: string): Promise<Omit<IUser, 'password' | 'refreshToken'>[]> {
+        try {
+            if (!query || query.trim().length < 2) {
+                throw new Error('Search query must be at least 2 characters long');
+            }
+
+            const searchRegex = new RegExp(query, 'i');
+            
+            const users = await User.find({
+                $or: [
+                    { name: { $regex: searchRegex } },
+                    { email: { $regex: searchRegex } }
+                ]
+            }, { password: 0, refreshToken: 0 });
+
+            return users;
+        } catch (error: any) {
+            throw new Error(`Error searching users: ${error.message}`);
+        }
     }
 }
 
