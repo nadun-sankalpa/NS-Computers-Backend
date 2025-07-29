@@ -27,14 +27,7 @@ class ProductService {
     /**
      * Create a new product
      */
-    async createProduct(productData: {
-        name: string;
-        description: string;
-        price: number;
-        stock: number;
-        category: string;
-        imageUrl?: string;
-    }): Promise<IProduct> {
+    async createProduct(productData: Partial<IProduct>): Promise<IProduct> { // Changed type to Partial<IProduct>
         try {
             const product = new Product(productData);
             return await product.save();
@@ -47,13 +40,13 @@ class ProductService {
      * Update an existing product
      */
     async updateProduct(
-        id: string, 
+        id: string,
         updateData: UpdateQuery<IProduct>
     ): Promise<IProduct | null> {
         try {
             return await Product.findByIdAndUpdate(
-                id, 
-                updateData, 
+                id,
+                updateData,
                 { new: true, runValidators: true }
             );
         } catch (error) {
