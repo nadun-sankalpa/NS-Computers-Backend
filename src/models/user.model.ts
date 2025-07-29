@@ -123,7 +123,34 @@ userSchema.pre('save', async function (this: IUserDocument, next) {
 
 // Method to compare password
 userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
-    return await bcrypt.compare(candidatePassword, this.password);
+    try {
+        if (!candidatePassword) {
+            console.error('[Auth] No password provided for comparison');
+            return false;
+        }
+        
+        if (!this.password) {
+            console.error('[Auth] No stored password hash found for user:', this.email);
+            return false;
+        }
+        
+        console.log('[Auth] Comparing password for user:', this.email);
+        console.log('[Auth] Stored hash exists:', !!this.password);
+        console.log('[Auth] Candidate password provided:', !!candidatePassword);
+        
+        const isMatch = await bcrypt.compare(candidatePassword, this.password);
+        console.log('[Auth] Password comparison result:', isMatch);
+        
+        return isMatch;
+    } catch (error) {
+        console.error('[Auth] Error in comparePassword:', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            userId: this._id,
+            hasStoredPassword: !!this.password,
+            receivedPassword: !!candidatePassword
+        });
+        throw error; // Re-throw to be handled by the auth service
+    }
 };
 
 // Create and export the User model

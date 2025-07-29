@@ -1,11 +1,12 @@
+// src/services/user.service.ts
 import User, { IUser, IUserDocument } from '../models/user.model';
 import { FilterQuery, UpdateQuery, Types } from 'mongoose';
 import { emailService } from './email.service';
 
 export class UserService {
     // Email validation regex
-    private readonly emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    
+    private readonly emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // This regex is used for email validation
+
     // Password validation regex - at least 8 chars, 1 uppercase, 1 lowercase, 1 number
     private readonly passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/;
 
@@ -13,19 +14,29 @@ export class UserService {
      * Validate user input
      */
     private validateUserInput(userData: Partial<IUser> & { password?: string }): { isValid: boolean; errors: string[] } {
-        const { name, email, password } = userData;
+        const { name, email, password, phone, address } = userData;
+
         const errors: string[] = [];
 
         if (!name || name.trim().length < 2) {
             errors.push('Name must be at least 2 characters long');
         }
 
-        if (!email || !this.emailRegex.test(email)) {
+        if (!email || !this.emailRegex.test(email)) { // This line checks the email format
             errors.push('Please enter a valid email address');
         }
 
         if (password && !this.passwordRegex.test(password)) {
             errors.push('Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number');
+        } else if (!password && !userData._id) {
+            errors.push('Password is required');
+        }
+
+        if (!phone || phone.trim().length < 7) {
+            errors.push('Phone number must be at least 7 characters long');
+        }
+        if (!address || address.trim().length < 5) {
+            errors.push('Address must be at least 5 characters long');
         }
 
         return {
@@ -45,20 +56,17 @@ export class UserService {
         address?: string;
         phone?: string;
     }): Promise<IUserDocument> {
-        // Validate input
         const { isValid, errors } = this.validateUserInput(userData);
         if (!isValid) {
             throw new Error(`Validation failed: ${errors.join(', ')}`);
         }
 
         try {
-            // Check if user already exists
             const existingUser = await User.findOne({ email: userData.email });
             if (existingUser) {
                 throw new Error('User with this email already exists');
             }
 
-            // Create and save the user
             const user = new User({
                 name: userData.name,
                 email: userData.email,
@@ -67,10 +75,9 @@ export class UserService {
                 address: userData.address || '',
                 phone: userData.phone || ''
             });
-            
+
             const savedUser = await user.save();
 
-            // Send welcome email (don't await to not block the response)
             emailService.sendWelcomeEmail(savedUser.email, savedUser.name)
                 .then(sent => {
                     if (!sent) {
@@ -127,23 +134,22 @@ export class UserService {
      * Update user
      */
     async updateUser(
-        id: string, 
+        id: string,
         updateData: UpdateQuery<IUser>
     ): Promise<Omit<IUser, 'password' | 'refreshToken'> | null> {
         try {
             if (!Types.ObjectId.isValid(id)) {
                 throw new Error('Invalid user ID');
             }
-            
-            // Don't allow updating password or refreshToken through this method
+
             const { password, refreshToken, ...safeUpdateData } = updateData as any;
-            
+
             const updatedUser = await User.findByIdAndUpdate(
-                id, 
+                id,
                 { $set: { ...safeUpdateData, updatedAt: new Date() } },
                 { new: true, runValidators: true, projection: { password: 0, refreshToken: 0 } }
             );
-            
+
             return updatedUser;
         } catch (error: any) {
             throw new Error(`Error updating user: ${error.message}`);
@@ -158,7 +164,7 @@ export class UserService {
             if (!Types.ObjectId.isValid(id)) {
                 throw new Error('Invalid user ID');
             }
-            
+
             const result = await User.findByIdAndDelete(id);
             return !!result;
         } catch (error: any) {
@@ -173,7 +179,7 @@ export class UserService {
         try {
             const userDoc = await User.findById(user._id).select('+password');
             if (!userDoc) return false;
-            
+
             return await userDoc.comparePassword(candidatePassword);
         } catch (error: any) {
             throw new Error(`Error comparing passwords: ${error.message}`);
@@ -188,7 +194,7 @@ export class UserService {
             if (!Types.ObjectId.isValid(userId)) {
                 throw new Error('Invalid user ID');
             }
-            
+
             await User.findByIdAndUpdate(
                 userId,
                 { refreshToken },
@@ -209,7 +215,7 @@ export class UserService {
             }
 
             const searchRegex = new RegExp(query, 'i');
-            
+
             const users = await User.find({
                 $or: [
                     { name: { $regex: searchRegex } },

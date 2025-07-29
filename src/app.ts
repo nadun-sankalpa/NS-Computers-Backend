@@ -10,6 +10,7 @@ import userRoutes from './routes/user.routes';
 import productRoutes from './routes/product.routes';
 import orderRoutes from './routes/order.routes';
 import { authenticateToken } from './middleware/auth.middleware';
+import contactRoutes from "./routes/contact.routes";
 
 // Load environment variables
 config();
@@ -20,9 +21,9 @@ const app: Express = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS Configuration
+// CORS Configuration - CRUCIAL: Ensure this includes your frontend origin(s)
 app.use(cors({
-  origin: ['http://localhost:5173'],
+  origin: ['http://localhost:5173', 'http://localhost:5174'], // Make sure http://localhost:5174 is listed here
   credentials: true
 }));
 
@@ -30,7 +31,7 @@ app.use(cors({
 app.get('/api/health', (req: Request, res: Response) => {
   const dbStatus = mongoose.connection.readyState;
   let dbStatusText = '';
-  
+
   switch(dbStatus) {
     case 0: dbStatusText = 'disconnected'; break;
     case 1: dbStatusText = 'connected'; break;
@@ -38,23 +39,25 @@ app.get('/api/health', (req: Request, res: Response) => {
     case 3: dbStatusText = 'disconnecting'; break;
     default: dbStatusText = 'unknown';
   }
-  
-  res.status(200).json({ 
-    status: 'ok', 
+
+  res.status(200).json({
+    status: 'ok',
     timestamp: new Date(),
     database: {
       status: dbStatusText,
       connection: process.env.MONGO_URI ? 'Configured' : 'Not configured',
       dbName: mongoose.connection.db?.databaseName || 'Not connected'
-    }
+    },
+    uptime: process.uptime()
   });
 });
 
-// API Routes
+// API Routes - Ensure these are defined AFTER the CORS middleware
 app.use('/api/auth', authRoutes);
 app.use('/api/users',  userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', authenticateToken, orderRoutes);
+app.use('/api/contact', contactRoutes);
 
 // 404 Handler
 app.use(notFound);
@@ -62,8 +65,8 @@ app.use(notFound);
 // Error Handler
 app.use(errorHandler);
 
-// Use port from environment configuration
-const PORT = env.PORT;
+// Use port from environment configuration, with a fallback
+const PORT = env.PORT || 3000; // Ensure this matches your backend's actual running port
 
 const startServer = async () => {
   try {
@@ -74,7 +77,7 @@ const startServer = async () => {
       console.error('❌ Failed to connect to database:', dbError instanceof Error ? dbError.message : 'Unknown error');
       process.exit(1);
     }
-    
+
     // Start the server
     const server = app.listen(PORT, () => {
       console.log(`\n🚀 Server running on http://localhost:${PORT}`);
@@ -84,7 +87,7 @@ const startServer = async () => {
     // Handle server errors
     server.on('error', (error: NodeJS.ErrnoException) => {
       if (error.syscall !== 'listen') throw error;
-      
+
       // Handle specific listen errors with friendly messages
       switch (error.code) {
         case 'EACCES':
@@ -99,7 +102,7 @@ const startServer = async () => {
           throw error;
       }
     });
-    
+
     // Handle process termination
     process.on('SIGINT', () => {
       console.log('\nGracefully shutting down from SIGINT (Ctrl+C)');
@@ -108,7 +111,7 @@ const startServer = async () => {
         process.exit(0);
       });
     });
-    
+
   } catch (error) {
     if (env.NODE_ENV === 'development') {
       console.log(`🚀 Starting in ${env.NODE_ENV} mode`);
@@ -119,6 +122,5 @@ const startServer = async () => {
   }
 };
 
-// Export the app and startServer for programmatic usage
 export { startServer };
 export default app;
