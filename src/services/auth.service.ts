@@ -30,77 +30,81 @@ export const authenticateUser = async (email: string, inputPassword: string) => 
 
     // Find user by email in the database and explicitly select the password field
     const existingUser = await User.findOne({ email }).select('+password');
-    
+    console.log("Hello", existingUser)
+
+
     if (!existingUser) {
       console.log('[Auth] User not found in database');
       throw new Error('User not found');
     }
 
-    // Debug log (be careful with logging sensitive data in production)
-    console.log('[Auth] User found:', {
-      id: existingUser._id,
-      email: existingUser.email,
-      hasPassword: !!existingUser.password,
-      role: existingUser.role
-    });
+    return {existingUser};
 
-    // Check if user has a password set
-    if (!existingUser.password) {
-      console.error('[Auth] No password set for user:', existingUser.email);
-      throw new Error('Authentication failed: No password set for user');
-    }
-
-    // Check if password is valid
-    console.log('[Auth] Starting password comparison...');
-    const isValidPassword = await existingUser.comparePassword(inputPassword);
-    
-    if (!isValidPassword) {
-      console.log('[Auth] Password comparison failed');
-      throw new Error('Invalid password');
-    }
-    
-    console.log('[Auth] Password verified successfully');
-
-    // Generate access token (short-lived)
-    const accessToken = jwt.sign(
-        {
-          userId: existingUser._id,
-          email: existingUser.email,
-          role: existingUser.role
-        },
-        JWT_SECRET,
-        { expiresIn: '15m' } // Access token expires in 15 minutes
-    );
-
-    // Generate refresh token (long-lived)
-    const refreshToken = jwt.sign(
-      {
-        userId: existingUser._id,
-        email: existingUser.email,
-        role: existingUser.role
-      },
-      REFRESH_SECRET,
-      { expiresIn: '7d' } // Refresh token expires in 7 days
-    );
-    
-    console.log('[Auth] Generated refresh token');
-
-    // Store refresh token (in-memory example)
-    refreshTokens.add(refreshToken);
-
-    // Convert user document to plain object and remove sensitive data
-    const userObject = existingUser.toObject();
-    const { password: _, refreshToken: __, ...userData } = userObject;
-
-    console.log('[Auth] Authentication successful for user:', userData.email);
-    console.log('[Auth] Generated access token (first 20 chars):', accessToken.substring(0, 20) + '...');
-    console.log('[Auth] Generated refresh token (first 20 chars):', refreshToken.substring(0, 20) + '...');
-    
-    return {
-      accessToken,
-      refreshToken,
-      user: userData // Return the user object without sensitive data
-    };
+    // // Debug log (be careful with logging sensitive data in production)
+    // console.log('[Auth] User found:', {
+    //   id: existingUser._id,
+    //   email: existingUser.email,
+    //   hasPassword: !!existingUser.password,
+    //   role: existingUser.role
+    // });
+    //
+    // // Check if user has a password set
+    // if (!existingUser.password) {
+    //   console.error('[Auth] No password set for user:', existingUser.email);
+    //   throw new Error('Authentication failed: No password set for user');
+    // }
+    //
+    // // Check if password is valid
+    // console.log('[Auth] Starting password comparison...');
+    // const isValidPassword = await existingUser.comparePassword(inputPassword);
+    //
+    // if (!isValidPassword) {
+    //   console.log('[Auth] Password comparison failed');
+    //   throw new Error('Invalid password');
+    // }
+    //
+    // console.log('[Auth] Password verified successfully');
+    //
+    // // Generate access token (short-lived)
+    // const accessToken = jwt.sign(
+    //     {
+    //       userId: existingUser._id,
+    //       email: existingUser.email,
+    //       role: existingUser.role
+    //     },
+    //     JWT_SECRET,
+    //     { expiresIn: '15m' } // Access token expires in 15 minutes
+    // );
+    //
+    // // Generate refresh token (long-lived)
+    // const refreshToken = jwt.sign(
+    //   {
+    //     userId: existingUser._id,
+    //     email: existingUser.email,
+    //     role: existingUser.role
+    //   },
+    //   REFRESH_SECRET,
+    //   { expiresIn: '7d' } // Refresh token expires in 7 days
+    // );
+    //
+    // console.log('[Auth] Generated refresh token');
+    //
+    // // Store refresh token (in-memory example)
+    // refreshTokens.add(refreshToken);
+    //
+    // // Convert user document to plain object and remove sensitive data
+    // const userObject = existingUser.toObject();
+    // const { password: _, refreshToken: __, ...userData } = userObject;
+    //
+    // console.log('[Auth] Authentication successful for user:', userData.email);
+    // console.log('[Auth] Generated access token (first 20 chars):', accessToken.substring(0, 20) + '...');
+    // console.log('[Auth] Generated refresh token (first 20 chars):', refreshToken.substring(0, 20) + '...');
+    //
+    // return {
+    //   accessToken,
+    //   refreshToken,
+    //   user: userData // Return the user object without sensitive data
+    // };
   } catch (error) {
     console.error('Authentication error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',

@@ -31,9 +31,10 @@ export const login = async (req: Request, res: Response) => {
         success: true,
         message: "Login successful",
         data: {
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-          user: result.user
+          result: result,
+          // accessToken: result.accessToken,
+          // refreshToken: result.refreshToken,
+          // user: result.user
         }
       });
       

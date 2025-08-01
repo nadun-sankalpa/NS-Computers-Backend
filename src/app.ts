@@ -56,7 +56,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users',  userRoutes);
 app.use('/api/products', productRoutes);
-app.use('/api/orders', authenticateToken, orderRoutes);
+app.use('/api/orders', orderRoutes);
 app.use('/api/contact', contactRoutes);
 
 // 404 Handler
