@@ -16,11 +16,14 @@ class ProductService {
     /**
      * Get a single product by ID
      */
-    async getProductById(id: string): Promise<IProduct | null> {
+    async getProductById(id: string | number): Promise<IProduct | null> {
         try {
-            return await Product.findById(id);
+            // Convert string ID to number if needed
+            const productId = typeof id === 'string' ? parseInt(id, 10) : id;
+            return await Product.findById(productId);
         } catch (error) {
-            throw new Error('Product not found');
+            console.error('Error in getProductById:', error);
+            throw new Error('Error finding product');
         }
     }
 
@@ -40,12 +43,14 @@ class ProductService {
      * Update an existing product
      */
     async updateProduct(
-        id: string,
+        id: string | number,
         updateData: UpdateQuery<IProduct>
     ): Promise<IProduct | null> {
         try {
+            // Convert string ID to number if needed
+            const productId = typeof id === 'string' ? parseInt(id, 10) : id;
             return await Product.findByIdAndUpdate(
-                id,
+                productId,
                 updateData,
                 { new: true, runValidators: true }
             );
@@ -57,11 +62,14 @@ class ProductService {
     /**
      * Delete a product
      */
-    async deleteProduct(id: string): Promise<boolean> {
+    async deleteProduct(id: string | number): Promise<boolean> {
         try {
-            const result = await Product.findByIdAndDelete(id);
-            return result !== null;
+            // Convert string ID to number if needed
+            const productId = typeof id === 'string' ? parseInt(id, 10) : id;
+            const result = await Product.findByIdAndDelete(productId);
+            return !!result;
         } catch (error) {
+            console.error('Error in deleteProduct:', error);
             throw new Error('Error deleting product');
         }
     }

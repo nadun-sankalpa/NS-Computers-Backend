@@ -22,28 +22,57 @@ interface ProductDataForFrontend {
 // Get all products
 export const getAllProducts = async (req: Request, res: Response) => {
     try {
+        console.log('Fetching all products...');
         const products = await productService.getAllProducts();
+        
+        if (!Array.isArray(products)) {
+            console.error('Expected products to be an array, got:', typeof products);
+            return res.status(500).json({
+                success: false,
+                message: 'Invalid products data received from service'
+            });
+        }
+
+        console.log(`Found ${products.length} products`);
 
         // Transform IProduct documents to ProductData format for the frontend
-        const transformedProducts: ProductDataForFrontend[] = products.map(p => ({
-            id: p._id.toString(), // Convert MongoDB ObjectId to string for frontend
-            name: p.name,
-            image: p.imageUrl || 'default-product.png', // Use imageUrl from DB, or a default placeholder
-            rating: p.rating !== undefined ? p.rating : 0, // Default to 0 if not set in DB
-            specs: p.specs || [], // Default to empty array if not set in DB
-            price: p.price,
-            originalPrice: p.originalPrice, // Will be undefined if not set or not on sale
-            currency: p.currency || "LKR", // Default currency
-            isOnSale: p.isOnSale !== undefined ? p.isOnSale : false, // Default to false if not set
-            description: p.description, // Include description
-            stock: p.stock, // Include stock
-            category: p.category, // Include category
-        }));
+        const transformedProducts: ProductDataForFrontend[] = products
+            .filter(p => {
+                const isValid = p && p._id != null;
+                if (!isValid) {
+                    console.warn('Skipping invalid product:', p);
+                }
+                return isValid;
+            })
+            .map(p => ({
+                id: p._id?.toString() || 'unknown', // Safely convert numeric ID to string
+                name: p.name || 'Unnamed Product',
+                image: p.imageUrl || 'default-product.png',
+                rating: p.rating ?? 0,
+                specs: Array.isArray(p.specs) ? p.specs : [],
+                price: p.price ?? 0,
+                originalPrice: p.originalPrice,
+                currency: p.currency || 'LKR',
+                isOnSale: Boolean(p.isOnSale),
+                description: p.description ?? '',
+                stock: p.stock ?? 0,
+                category: p.category || 'Uncategorized'
+            }));
 
-        res.status(200).json(transformedProducts);
+        console.log(`Successfully transformed ${transformedProducts.length} products`);
+
+        res.json({
+            success: true,
+            count: transformedProducts.length,
+            data: transformedProducts
+        });
     } catch (error) {
-        console.error('Error fetching products:', error);
-        res.status(500).json({ message: 'Error fetching products', error: error instanceof Error ? error.message : 'Unknown error' });
+        console.error('Error in getAllProducts controller:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Error fetching products',
+            error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+        });
     }
 };
 

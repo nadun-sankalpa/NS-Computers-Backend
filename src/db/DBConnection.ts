@@ -54,27 +54,18 @@ const connectDB = async (): Promise<string> => {
             throw new Error('Failed to get database instance');
         }
         
-        try {
-            // Drop the users collection to remove all indexes
-            await db.collection('users').drop();
-            console.log('Dropped users collection to reset all indexes');
-        } catch (error: unknown) {
-            const mongoError = error as MongoError;
-            if (mongoError.codeName === 'NamespaceNotFound') {
-                console.log('Users collection does not exist, creating a fresh one');
-            } else {
-                console.error('Error dropping users collection:', error);
-                throw error;
-            }
+        // Check if users collection exists, if not create it
+        const collections = await db.listCollections({ name: 'users' }).toArray();
+        if (collections.length === 0) {
+            console.log('Users collection does not exist, creating a new one');
+            await db.createCollection('users');
+        } else {
+            console.log('Using existing users collection');
         }
-
-        // Recreate the collection with the correct schema
-        await db.createCollection('users');
-        console.log('Created fresh users collection');
-
-        // Rebuild indexes based on the current schema
+        
+        // Ensure indexes are up to date with the current schema
         await mongoose.connection.syncIndexes();
-        console.log('Recreated indexes based on current schema');
+        console.log('Ensured indexes are up to date with the current schema');
 
         return `MongoDB connected successfully to database "${db.databaseName}"`;
   } catch (error) {

@@ -1,105 +1,66 @@
 import { Order, IOrder, IOrderItem } from '../models/order.model';
 import { Product } from '../models/product.model';
-import { IUser } from '../models/user.model';
-import { productService } from './product.service';
+import User from '../models/user.model';
 import { Types } from 'mongoose';
-import { IProduct } from '../models/product.model';
 
 class OrderService {
     /**
      * Create a new order and update product stock
      */
+    // Define a return type for better type safety
+    private createOrderResponse(order: IOrder | null, error: string | null, status: number = 200) {
+        return { order, error, status };
+    }
+
     async createOrder(
-        userId: string | Types.ObjectId,
+        userId: number,
         items: Array<{
-            product: string | Types.ObjectId;
-            quantity: number;
+            name: string;
             price: number;
         }>,
-        shippingAddress: {
-            address: string;
-            city: string;
-            postalCode: string;
-            country: string;
-        },
-        paymentMethod: string
-    ): Promise<{ order: IOrder | null; error: string | null }> {
+        username: string
+    ): Promise<{ order: IOrder | null; error: string | null; status: number }> {
         const session = await Order.startSession();
         session.startTransaction();
 
         try {
-            // 1. Validate all items and check stock
-            const orderItems: IOrderItem[] = [];
-            let itemsPrice = 0;
-
-            for (const item of items) {
-                const product = await Product.findById(item.product).session(session);
-                
-                if (!product) {
-                    await session.abortTransaction();
-                    return { 
-                        order: null, 
-                        error: `Product with ID ${item.product} not found` 
-                    };
-                }
-
-                if (product.stock < item.quantity) {
-                    await session.abortTransaction();
-                    return { 
-                        order: null, 
-                        error: `Insufficient stock for product ${product.name}. Available: ${product.stock}` 
-                    };
-                }
-
-                // Add to order items with proper type casting
-                const orderItem: IOrderItem = {
-                    product: product._id as unknown as Types.ObjectId, // Cast to ObjectId
-                    name: product.name,
-                    quantity: item.quantity,
-                    price: product.price,
-                    image: product.imageUrl || ''
-                };
-                orderItems.push(orderItem);
-
-                itemsPrice += product.price * item.quantity;
-
-                // Update product stock
-                product.stock -= item.quantity;
-                await product.save({ session });
+            // 1. Validate user exists (using findOne for numeric ID)
+            const user = await User.findOne({ _id: userId }).session(session);
+            if (!user) {
+                await session.abortTransaction();
+                return this.createOrderResponse(
+                    null, 
+                    `User with ID ${userId} not found`,
+                    404
+                );
             }
 
-            // 2. Calculate prices
-            const taxPrice = Number((itemsPrice * 0.1).toFixed(2));
-            const shippingPrice = itemsPrice > 100 ? 0 : 10;
-            const totalPrice = itemsPrice + taxPrice + shippingPrice;
+            // 2. Calculate total price
+            const totalPrice = items.reduce((sum, item) => sum + item.price, 0);
 
             // 3. Create the order
             const order = new Order({
-                user: userId,
-                orderItems,
-                shippingAddress,
-                paymentMethod,
-                itemsPrice,
-                taxPrice,
-                shippingPrice,
-                totalPrice,
+                userId: userId,
+                username: username,
+                items: items,
+                status: 'pending',
+                totalPrice: totalPrice
             });
 
             const createdOrder = await order.save({ session });
             await session.commitTransaction();
             
-            return { 
-                order: await createdOrder.populate('user', 'name email'),
-                error: null 
-            };
+            return this.createOrderResponse(createdOrder, null, 201);
 
         } catch (error: any) {
             await session.abortTransaction();
             console.error('Error creating order:', error);
-            return { 
-                order: null, 
-                error: error.message || 'Error creating order' 
-            };
+            console.error('Error in order service:', error);
+            return this.createOrderResponse(
+                null, 
+                error.message || 'Error creating order',
+                500
+            );
         } finally {
             await session.endSession();
         }
@@ -110,12 +71,7 @@ class OrderService {
      */
     async getOrderById(id: string): Promise<IOrder | null> {
         try {
-            return await Order.findById(id)
-                .populate('user', 'name email')
-                .populate({
-                    path: 'orderItems.product',
-                    select: 'name imageUrl'
-                });
+            return await Order.findById(id);
         } catch (error) {
             throw new Error('Error fetching order');
         }
@@ -126,12 +82,8 @@ class OrderService {
      */
     async getOrdersByUserId(userId: string): Promise<IOrder[]> {
         try {
-            return await Order.find({ user: userId })
-                .sort({ createdAt: -1 })
-                .populate({
-                    path: 'orderItems.product',
-                    select: 'name imageUrl'
-                });
+            return await Order.find({ userId: userId })
+                .sort({ createdAt: -1 });
         } catch (error) {
             throw new Error('Error fetching user orders');
         }
@@ -142,9 +94,7 @@ class OrderService {
      */
     async getAllOrders(): Promise<IOrder[]> {
         try {
-            return await Order.find({})
-                .populate('user', 'id name')
-                .sort({ createdAt: -1 });
+            return await Order.find({}).sort({ createdAt: -1 });
         } catch (error) {
             throw new Error('Error fetching all orders');
         }
@@ -154,22 +104,13 @@ class OrderService {
      * Update order to paid
      */
     async updateOrderToPaid(
-        orderId: string,
-        paymentResult: {
-            id: string;
-            status: string;
-            update_time: string;
-            email_address: string;
-        }
+        orderId: string
     ): Promise<IOrder | null> {
         try {
             const order = await Order.findById(orderId);
             
             if (order) {
-                order.isPaid = true;
-                order.paidAt = new Date();
-                order.paymentResult = paymentResult;
-                
+                order.status = 'processing';
                 const updatedOrder = await order.save();
                 return updatedOrder;
             }
@@ -188,9 +129,7 @@ class OrderService {
             const order = await Order.findById(orderId);
             
             if (order) {
-                order.isDelivered = true;
-                order.deliveredAt = new Date();
-                
+                order.status = 'delivered';
                 const updatedOrder = await order.save();
                 return updatedOrder;
             }

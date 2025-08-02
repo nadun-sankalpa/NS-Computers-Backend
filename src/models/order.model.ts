@@ -1,128 +1,70 @@
 import { Document, Schema, model, Model, Types } from 'mongoose';
 import { IUser } from './user.model';
-import { IProduct } from './product.model';
 
+// 1. Define interfaces
 export interface IOrderItem {
-    product: Types.ObjectId | IProduct;
     name: string;
-    quantity: number;
     price: number;
-    image: string;
 }
 
 export interface IOrder extends Document {
     _id: number;
-    user: Types.ObjectId | IUser;
+    userId: number;
+    username: string;
     items: IOrderItem[];
-    shippingAddress: {
-        address: string;
-        city: string;
-        postalCode: string;
-        country: string;
-    };
-    paymentMethod: string;
-    paymentResult?: {
-        id: string;
-        status: string;
-        update_time: string;
-        email_address: string;
-    };
-    itemsPrice: number;
-    taxPrice: number;
-    shippingPrice: number;
-    totalPrice: number;
-    isPaid: boolean;
-    paidAt?: Date;
-    isDelivered: boolean;
-    deliveredAt?: Date;
     status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+    totalPrice: number;
     createdAt: Date;
     updatedAt: Date;
 }
 
-// Interface for Order model
-interface IOrderModel extends Model<IOrder> {
-    // Static methods can be defined here
+// 2. Define counter schema and model
+interface ICounter extends Document {
+    _id: string;
+    seq: number;
 }
 
-// Create the schema
-const orderSchema = new Schema<IOrder, IOrderModel>(
+const counterSchema = new Schema<ICounter>({
+    _id: { type: String, required: true },
+    seq: { type: Number, default: 1 }
+});
+
+const Counter = model<ICounter>('Counter', counterSchema);
+
+// 3. Define order schema
+const orderSchema = new Schema<IOrder>(
     {
         _id: { type: Number },
-        user: {
-            type: Schema.Types.ObjectId,
+        userId: {
+            type: Number,
             required: true,
             ref: 'User'
         },
-        items: [
-            {
-                product: {
-                    type: Schema.Types.ObjectId,
-                    required: true,
-                    ref: 'Product'
-                },
-                name: { type: String, required: true },
-                quantity: { type: Number, required: true },
-                price: { type: Number, required: true },
-                image: { type: String, required: true }
-            }
-        ],
-        shippingAddress: {
-            address: { type: String, required: true },
-            city: { type: String, required: true },
-            postalCode: { type: String, required: true },
-            country: { type: String, required: true }
-        },
-        paymentMethod: {
+        username: {
             type: String,
             required: true
         },
-        paymentResult: {
-            id: { type: String },
-            status: { type: String },
-            update_time: { type: String },
-            email_address: { type: String }
-        },
-        itemsPrice: {
-            type: Number,
-            required: true,
-            default: 0.0
-        },
-        taxPrice: {
-            type: Number,
-            required: true,
-            default: 0.0
-        },
-        shippingPrice: {
-            type: Number,
-            required: true,
-            default: 0.0
+        items: [
+            {
+                name: { 
+                    type: String, 
+                    required: true 
+                },
+                price: { 
+                    type: Number, 
+                    required: true 
+                }
+            }
+        ],
+        status: {
+            type: String,
+            enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+            default: 'pending'
         },
         totalPrice: {
             type: Number,
             required: true,
             default: 0.0
-        },
-        isPaid: {
-            type: Boolean,
-            required: true,
-            default: false
-        },
-        paidAt: {
-            type: Date
-        },
-        isDelivered: {
-            type: Boolean,
-            required: true,
-            default: false
-        },
-        deliveredAt: {
-            type: Date
-        },
-        status: {
-            type: String,
-            enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
-            default: 'pending'
         }
     },
     {
@@ -130,8 +72,29 @@ const orderSchema = new Schema<IOrder, IOrderModel>(
     }
 );
 
-// Create and export the Order model
-export const Order = model<IOrder, IOrderModel>('Order', orderSchema);
+// 4. Add pre-save hook for auto-incrementing ID
+orderSchema.pre<IOrder>('save', async function(next) {
+    if (this.isNew) {
+        try {
+            const counter = await Counter.findByIdAndUpdate(
+                { _id: 'orderId' },
+                { $inc: { seq: 1 } },
+                { new: true, upsert: true }
+            );
+            this._id = counter.seq;
+            next();
+        } catch (error) {
+            next(error as Error);
+        }
+    } else {
+        next();
+    }
+});
 
-export type OrderDocument = IOrder;
-export type OrderModel = IOrderModel;
+// 5. Create and export the model
+const Order = model<IOrder>('Order', orderSchema);
+
+export { Order };
+
+export type { IOrder as OrderDocument };
+export type OrderModel = typeof Order;

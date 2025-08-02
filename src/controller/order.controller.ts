@@ -5,10 +5,22 @@ import { orderService } from '../services/order.service';
 // Create a new order
 export const createOrder = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { userId, items, shippingAddress, paymentMethod } = req.body;
+        const { userId, items, username } = req.body;
         
         if (!userId) {
             res.status(400).json({ message: 'User ID is required' });
+            return;
+        }
+        
+        // Convert userId to number
+        const userIdNum = Number(userId);
+        if (isNaN(userIdNum)) {
+            res.status(400).json({ message: 'User ID must be a valid number' });
+            return;
+        }
+        
+        if (!username) {
+            res.status(400).json({ message: 'Username is required' });
             return;
         }
         
@@ -17,27 +29,24 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
             return;
         }
 
-        if (!shippingAddress || !shippingAddress.address || !shippingAddress.city || !shippingAddress.postalCode || !shippingAddress.country) {
-            res.status(400).json({ message: 'Complete shipping address is required' });
-            return;
-        }
-
-        if (!paymentMethod) {
-            res.status(400).json({ message: 'Payment method is required' });
+        // Validate each item has required fields
+        const invalidItems = items.some(item => !item.name || item.price === undefined);
+        if (invalidItems) {
+            res.status(400).json({ message: 'Each item must have a name and price' });
             return;
         }
         
-        const { order, error } = await orderService.createOrder(
-            userId,
+        const { order, error, status = 500 } = await orderService.createOrder(
+            userIdNum,
             items,
-            shippingAddress,
-            paymentMethod
+            username
         );
         
         if (error || !order) {
-            res.status(400).json({
+            res.status(status || 400).json({
                 success: false,
-                message: error || 'Failed to create order'
+                message: error || 'Failed to create order',
+                details: error === 'Failed to create order' ? 'Unknown error occurred' : undefined
             });
             return;
         }
@@ -46,9 +55,10 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
             success: true,
             data: order
         });
-    } catch (error) {
-        console.error('Error in createOrder:', error);
-        res.status(500).json({
+    } catch (error: any) {
+        console.error('Error in createOrder controller:', error);
+        const status = error.status || 500;
+        res.status(status).json({
             success: false,
             message: 'Internal server error'
         });
@@ -133,37 +143,48 @@ export const getOrdersByUserId = async (req: Request, res: Response): Promise<vo
 // Update order status
 export const updateOrderStatus = async (req: Request, res: Response): Promise<void> => {
     try {
-        const orderId = req.params.id;
-        
-        if (!orderId) {
-            res.status(400).json({ success: false, message: 'Order ID is required' });
-            return;
-        }
-        
         const { status } = req.body;
-        
-        if (!status || !['pending', 'processing', 'completed', 'cancelled'].includes(status)) {
-            res.status(400).json({ success: false, message: 'Valid status is required (pending, processing, completed, cancelled)' });
+        const { id } = req.params;
+
+        if (!id) {
+            res.status(400).json({ message: 'Order ID is required' });
             return;
         }
-        
-        // First get the order
-        const order = await Order.findById(orderId);
-        
-        if (!order) {
-            res.status(404).json({ success: false, message: 'Order not found' });
+
+        if (!status || !['pending', 'processing', 'shipped', 'delivered', 'cancelled'].includes(status)) {
+            res.status(400).json({ message: 'Valid status is required' });
             return;
         }
+
+        let updatedOrder;
         
-        // Update the status
-        order.status = status;
-        const updatedOrder = await order.save();
-        
+        // Handle special status updates that might have specific logic
+        if (status === 'processing') {
+            updatedOrder = await orderService.updateOrderToPaid(id);
+        } else if (status === 'delivered') {
+            updatedOrder = await orderService.updateOrderToDelivered(id);
+        } else {
+            // For other status updates
+            const order = await Order.findById(id);
+            if (!order) {
+                res.status(404).json({ message: 'Order not found' });
+                return;
+            }
+            order.status = status;
+            updatedOrder = await order.save();
+        }
+
+        if (!updatedOrder) {
+            res.status(404).json({ message: 'Order not found' });
+            return;
+        }
+
         res.status(200).json({
             success: true,
             data: updatedOrder
         });
     } catch (error) {
+        console.error('Error updating order status:', error);
         res.status(500).json({
             success: false,
             message: 'Error updating order status',
