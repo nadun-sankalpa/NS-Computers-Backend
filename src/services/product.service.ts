@@ -9,6 +9,7 @@ class ProductService {
         try {
             return await Product.find(filter).sort({ createdAt: -1 });
         } catch (error) {
+            console.error('Error in getAllProducts:', error);
             throw new Error('Error fetching products');
         }
     }
@@ -18,9 +19,8 @@ class ProductService {
      */
     async getProductById(id: string | number): Promise<IProduct | null> {
         try {
-            // Convert string ID to number if needed
-            const productId = typeof id === 'string' ? parseInt(id, 10) : id;
-            return await Product.findById(productId);
+            // MongoDB uses string IDs, so no conversion is needed unless you're using a different database
+            return await Product.findById(id);
         } catch (error) {
             console.error('Error in getProductById:', error);
             throw new Error('Error finding product');
@@ -30,11 +30,12 @@ class ProductService {
     /**
      * Create a new product
      */
-    async createProduct(productData: Partial<IProduct>): Promise<IProduct> { // Changed type to Partial<IProduct>
+    async createProduct(productData: Partial<IProduct>): Promise<IProduct> {
         try {
             const product = new Product(productData);
             return await product.save();
         } catch (error) {
+            console.error('Error in createProduct:', error);
             throw new Error('Error creating product');
         }
     }
@@ -43,18 +44,17 @@ class ProductService {
      * Update an existing product
      */
     async updateProduct(
-        id: string | number,
+        id: string, // Changed to string for MongoDB ObjectId
         updateData: UpdateQuery<IProduct>
     ): Promise<IProduct | null> {
         try {
-            // Convert string ID to number if needed
-            const productId = typeof id === 'string' ? parseInt(id, 10) : id;
             return await Product.findByIdAndUpdate(
-                productId,
+                id,
                 updateData,
                 { new: true, runValidators: true }
             );
         } catch (error) {
+            console.error('Error in updateProduct:', error);
             throw new Error('Error updating product');
         }
     }
@@ -62,11 +62,9 @@ class ProductService {
     /**
      * Delete a product
      */
-    async deleteProduct(id: string | number): Promise<boolean> {
+    async deleteProduct(id: string): Promise<boolean> {
         try {
-            // Convert string ID to number if needed
-            const productId = typeof id === 'string' ? parseInt(id, 10) : id;
-            const result = await Product.findByIdAndDelete(productId);
+            const result = await Product.findByIdAndDelete(id);
             return !!result;
         } catch (error) {
             console.error('Error in deleteProduct:', error);
@@ -86,6 +84,7 @@ class ProductService {
                 ]
             });
         } catch (error) {
+            console.error('Error in searchProducts:', error);
             throw new Error('Error searching products');
         }
     }
