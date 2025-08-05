@@ -1,4 +1,4 @@
-import { Order, IOrder, IOrderItem } from '../models/order.model';
+import { Order, IOrder } from '../models/order.model';
 import { Product } from '../models/product.model';
 import User from '../models/user.model';
 import { Types } from 'mongoose';
@@ -14,11 +14,10 @@ class OrderService {
 
     async createOrder(
         userId: number,
-        items: Array<{
-            name: string;
-            price: number;
-        }>,
-        username: string
+        itemName: string,
+        itemPrice: number,
+        username: string,
+        status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' = 'pending'
     ): Promise<{ order: IOrder | null; error: string | null; status: number }> {
         const session = await Order.startSession();
         session.startTransaction();
@@ -36,14 +35,16 @@ class OrderService {
             }
 
             // 2. Calculate total price
-            const totalPrice = items.reduce((sum, item) => sum + item.price, 0);
-
-            // 3. Create the order
+            const totalPrice = itemPrice;
+            
+            // 3. Create the order with flat structure
             const order = new Order({
                 userId: userId,
                 username: username,
-                items: items,
-                status: 'pending',
+                itemName: itemName,
+                itemPrice: itemPrice,
+                itemStatus: status,
+                status: status,
                 totalPrice: totalPrice
             });
 
@@ -80,7 +81,7 @@ class OrderService {
     /**
      * Get orders by user ID
      */
-    async getOrdersByUserId(userId: string): Promise<IOrder[]> {
+    async getOrdersByUserId(userId: number): Promise<IOrder[]> {
         try {
             return await Order.find({ userId: userId })
                 .sort({ createdAt: -1 });
