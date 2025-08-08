@@ -23,13 +23,13 @@ export interface IUser extends Omit<IUserDocument, keyof Document> {
 
 // Interface for User model
 export interface IUserModel extends Model<IUserDocument> {
-    // Static methods can be defined here
+
 }
 
 // Create schema
 const userSchema = new Schema<IUserDocument, IUserModel>(
     {
-        _id: { 
+        _id: {
             type: Number,
             required: false
         },
@@ -99,10 +99,10 @@ userSchema.pre('save', async function (this: IUserDocument, next) {
             // Find the user with the highest _id
             const UserModel = this.constructor as unknown as Model<IUserDocument>;
             const lastUser = await UserModel.findOne({}, { _id: 1 }, { sort: { _id: -1 } });
-            
+
             // Set the new _id to be one more than the highest existing _id, or 1 if no users exist
             this._id = lastUser ? lastUser._id + 1 : 1;
-            
+
             console.log(`Setting new user _id to: ${this._id}`);
             next();
         } catch (error) {
@@ -139,19 +139,19 @@ userSchema.methods.comparePassword = async function(candidatePassword: string): 
             console.error('[Auth] No password provided for comparison');
             return false;
         }
-        
+
         if (!this.password) {
             console.error('[Auth] No stored password hash found for user:', this.email);
             return false;
         }
-        
+
         console.log('[Auth] Comparing password for user:', this.email);
         console.log('[Auth] Stored hash exists:', !!this.password);
         console.log('[Auth] Candidate password provided:', !!candidatePassword);
-        
+
         const isMatch = await bcrypt.compare(candidatePassword, this.password);
         console.log('[Auth] Password comparison result:', isMatch);
-        
+
         return isMatch;
     } catch (error) {
         console.error('[Auth] Error in comparePassword:', {

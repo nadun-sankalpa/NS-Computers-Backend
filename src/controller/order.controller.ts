@@ -5,48 +5,54 @@ import { orderService } from '../services/order.service';
 // Create a new order
 export const createOrder = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { userId, itemName, itemPrice, username } = req.body;
-        
+        const { userId, itemName, itemPrice, username, quantity } = req.body;
+
         if (!userId) {
             res.status(400).json({ message: 'User ID is required' });
             return;
         }
-        
+
         // Convert userId to number
         const userIdNum = Number(userId);
         if (isNaN(userIdNum)) {
             res.status(400).json({ message: 'User ID must be a valid number' });
             return;
         }
-        
+
         if (!username) {
             res.status(400).json({ message: 'Username is required' });
             return;
         }
-        
+
         if (!itemName) {
             res.status(400).json({ message: 'Item name is required' });
             return;
         }
-        
+
         if (itemPrice === undefined || typeof itemPrice !== 'number' || itemPrice < 0) {
-            res.status(400).json({ 
+            res.status(400).json({
                 success: false,
-                message: 'Item price must be a valid non-negative number' 
+                message: 'Item price must be a valid non-negative number'
             });
             return;
         }
 
         const orderStatus = req.body.status || 'pending'; // Default to 'pending' if not provided
-        
-        const { order, error, status: httpStatus = 500 } = await orderService.createOrder(
+        const orderQuantity = quantity === undefined ? 1 : Number(quantity);
+        if (isNaN(orderQuantity) || orderQuantity <= 0) {
+            res.status(400).json({ message: 'Quantity must be a positive number' });
+            return;
+        }
+
+        const { order, error, status: httpStatus = 500 } = await orderService.createOrderWithStockCheck(
             userIdNum,
             String(itemName),
             Number(itemPrice),
             String(username),
+            orderQuantity,
             orderStatus
         );
-        
+
         if (error || !order) {
             res.status(httpStatus).json({
                 success: false,
@@ -74,7 +80,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
     try {
         const orders = await orderService.getAllOrders();
-        
+
         res.status(200).json({
             success: true,
             count: orders.length,
@@ -93,19 +99,19 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 export const getOrderById = async (req: Request, res: Response): Promise<void> => {
     try {
         const orderId = req.params.id;
-        
+
         if (!orderId) {
             res.status(400).json({ success: false, message: 'Order ID is required' });
             return;
         }
-        
+
         const order = await orderService.getOrderById(orderId);
-        
+
         if (!order) {
             res.status(404).json({ success: false, message: 'Order not found' });
             return;
         }
-        
+
         res.status(200).json({
             success: true,
             data: order
@@ -123,21 +129,21 @@ export const getOrderById = async (req: Request, res: Response): Promise<void> =
 export const getOrdersByUserId = async (req: Request, res: Response): Promise<void> => {
     try {
         const { userId } = req.params;
-        
+
         if (!userId) {
             res.status(400).json({ success: false, message: 'User ID is required' });
             return;
         }
-        
+
         // Convert userId to number
         const userIdNum = Number(userId);
         if (isNaN(userIdNum)) {
             res.status(400).json({ success: false, message: 'User ID must be a valid number' });
             return;
         }
-        
+
         const orders = await orderService.getOrdersByUserId(userIdNum);
-        
+
         res.status(200).json({
             success: true,
             count: orders.length,
@@ -152,32 +158,35 @@ export const getOrdersByUserId = async (req: Request, res: Response): Promise<vo
     }
 };
 
-// Update order status
+// Update order (all fields)
 export const updateOrderStatus = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { status } = req.body;
         const { id } = req.params;
-
         if (!id) {
             res.status(400).json({ success: false, message: 'Order ID is required' });
             return;
         }
 
-        if (!status || !['pending', 'processing', 'shipped', 'delivered', 'cancelled'].includes(status)) {
-            res.status(400).json({ 
-                success: false, 
-                message: 'Valid status is required (pending, processing, shipped, delivered, cancelled)' 
-            });
-            return;
+        // Accept all updatable fields from the frontend
+        const updateFields: Partial<IOrder> = {};
+        const allowedFields = [
+            'userId', 'username', 'itemName', 'itemPrice',
+            'status', 'itemStatus', 'totalPrice', 'date'
+        ];
+        for (const field of allowedFields) {
+            if (req.body[field] !== undefined) {
+                updateFields[field as keyof IOrder] = req.body[field];
+            }
         }
 
-        // Update both status and itemStatus to keep them in sync
+        // If status is provided, sync itemStatus with it
+        if (updateFields.status) {
+            updateFields.itemStatus = updateFields.status;
+        }
+
         const updatedOrder = await Order.findByIdAndUpdate(
             id,
-            { 
-                status: status,
-                itemStatus: status 
-            },
+            updateFields,
             { new: true, runValidators: true }
         );
 
@@ -188,14 +197,14 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 
         res.status(200).json({
             success: true,
-            message: 'Order status updated successfully',
+            message: 'Order updated successfully',
             data: updatedOrder
         });
     } catch (error) {
-        console.error('Error updating order status:', error);
+        console.error('Error updating order:', error);
         res.status(500).json({
             success: false,
-            message: 'Error updating order status',
+            message: 'Error updating order',
             error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
@@ -205,20 +214,20 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
     try {
         const orderId = req.params.id;
-        
+
         if (!orderId) {
             res.status(400).json({ success: false, message: 'Order ID is required' });
             return;
         }
-        
+
         // Check if order exists and delete it
         const deletedOrder = await Order.findByIdAndDelete(orderId);
-        
+
         if (!deletedOrder) {
             res.status(404).json({ success: false, message: 'Order not found' });
             return;
         }
-        
+
         res.status(200).json({
             success: true,
             message: 'Order deleted successfully'

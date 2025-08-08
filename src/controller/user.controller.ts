@@ -15,10 +15,15 @@ interface UserResponse {
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
     try {
         const users = await userService.getAllUsers();
+        // Ensure each user has an 'id' field (frontend expects 'id', not '_id')
+        const usersWithId = users.map((user: any) => ({
+            ...user.toObject ? user.toObject() : user,
+            id: user._id,
+        }));
         const response: UserResponse = {
             success: true,
             message: 'Users retrieved successfully',
-            data: users
+            data: usersWithId
         };
         res.status(200).json(response);
     } catch (error: any) {

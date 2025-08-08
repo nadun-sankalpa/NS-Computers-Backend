@@ -12,6 +12,7 @@ const orderRouter: Router = Router();
 
 
 orderRouter.post('/save-order', createOrder);
+orderRouter.post('/place', createOrder);
 orderRouter.get('/get-all-orders', getAllOrders);
 orderRouter.get('/:id', getOrderById);
 orderRouter.put('/update-order/:id', updateOrderStatus);

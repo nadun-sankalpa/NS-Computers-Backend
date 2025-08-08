@@ -138,14 +138,16 @@ export class UserService {
         updateData: UpdateQuery<IUser>
     ): Promise<Omit<IUser, 'password' | 'refreshToken'> | null> {
         try {
-            if (!Types.ObjectId.isValid(id)) {
+            // Convert id to number for numeric _id
+            const numericId = Number(id);
+            if (isNaN(numericId)) {
                 throw new Error('Invalid user ID');
             }
 
             const { password, refreshToken, ...safeUpdateData } = updateData as any;
 
-            const updatedUser = await User.findByIdAndUpdate(
-                id,
+            const updatedUser = await User.findOneAndUpdate(
+                { _id: numericId },
                 { $set: { ...safeUpdateData, updatedAt: new Date() } },
                 { new: true, runValidators: true, projection: { password: 0, refreshToken: 0 } }
             );
@@ -161,11 +163,13 @@ export class UserService {
      */
     async deleteUser(id: string): Promise<boolean> {
         try {
-            if (!Types.ObjectId.isValid(id)) {
+            // Convert id to number for numeric _id
+            const numericId = Number(id);
+            if (isNaN(numericId)) {
                 throw new Error('Invalid user ID');
             }
 
-            const result = await User.findByIdAndDelete(id);
+            const result = await User.findOneAndDelete({ _id: numericId });
             return !!result;
         } catch (error: any) {
             throw new Error(`Error deleting user: ${error.message}`);
